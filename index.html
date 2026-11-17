@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>드론쇼 만들기</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;800&family=Noto+Sans+KR:wght@400;500;700&family=Black+Han+Sans&family=Jua&family=Do+Hyeon&family=Nanum+Pen+Script&family=Gowun+Dodum&display=swap">
+<style>
+/* 레이아웃 — 위는 밤하늘(캔버스), 아래는 한 칸짜리 조작판. 아이패드 손가락 기준 */
+:root{
+  color-scheme: dark;
+  --sky:#070b18;
+  --sky-2:#0d1430;
+  --panel:#111937;
+  --ink:#eaf0ff;
+  --ink-dim:#93a3c9;
+  --gold:#ffd166;
+  --disp:"Gothic A1","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+html{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+body{
+  margin:0;background:var(--sky);color:var(--ink);
+  font-family:var(--body);display:flex;flex-direction:column;
+}
+.wrap{
+  flex:1;display:flex;flex-direction:column;min-height:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px 18px;
+  gap:14px;max-width:900px;width:100%;margin:0 auto;
+}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-family:var(--disp);font-weight:800;font-size:1.5rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:0;color:var(--ink-dim);font-size:.85rem}
+.sky{
+  position:relative;flex:1;min-height:min(52vh,460px);border-radius:18px;overflow:hidden;
+  background:linear-gradient(180deg,var(--sky) 0%,var(--sky-2) 100%);
+  box-shadow:inset 0 0 0 1px #223;
+}
+canvas{display:block;width:100%;height:100%}
+.panel{background:var(--panel);border:1px solid #223055;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label.lab{font-size:.8rem;color:var(--ink-dim);font-weight:700;letter-spacing:.04em}
+input[type=text]{
+  flex:1;min-width:0;background:#0a1026;color:var(--ink);
+  border:1px solid #2b3a63;border-radius:12px;padding:13px 14px;
+  font-family:var(--disp);font-size:1.05rem;font-weight:700;
+}
+input[type=text]:focus-visible,button:focus-visible,input[type=range]:focus-visible,
+.filebtn:focus-within{outline:2px solid var(--gold);outline-offset:2px}
+button{
+  font-family:var(--body);font-size:.95rem;font-weight:700;color:var(--ink);
+  background:#18224a;border:1px solid #2b3a63;border-radius:12px;
+  padding:12px 16px;cursor:pointer;min-height:46px;
+}
+button:hover{background:#1f2b5c}
+button.go{background:var(--gold);color:#17120a;border-color:#e6b84e}
+button.go:hover{background:#ffdd8a}
+button[aria-pressed=true]{border-color:var(--gold);background:#23305f}
+.filebtn{position:relative;overflow:hidden;display:inline-flex}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+input[type=range]{flex:1;min-width:140px;accent-color:var(--gold)}
+.count{font-variant-numeric:tabular-nums;font-weight:700;min-width:4.6em;text-align:right}
+.note{color:var(--ink-dim);font-size:.78rem;line-height:1.6;margin:0}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>드론쇼 만들기</h1>
+    <p>글씨를 치면 불빛이 순식간에 날아와 그 모양으로 섭니다</p>
+  </header>
+
+  <div class="sky"><canvas id="cv"></canvas></div>
+
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="txt" value="60AI만들기" maxlength="20" aria-label="띄울 글씨">
+      <button class="go" id="run">띄우기</button>
+    </div>
+
+    <div class="row" role="group" aria-label="글씨체">
+      <span class="lab">글씨체</span>
+      <button data-f="Gothic A1" aria-pressed="true">기본</button>
+      <button data-f="Black Han Sans" data-chk="1">아주 굵게</button>
+      <button data-f="Jua" data-chk="1">둥글게</button>
+      <button data-f="Do Hyeon" data-chk="1">각지게</button>
+      <button data-f="Nanum Pen Script" data-chk="1">손글씨</button>
+      <button data-f="Gowun Dodum" data-chk="1">단정하게</button>
+    </div>
+
+    <div class="row" role="group" aria-label="글씨 굵기">
+      <span class="lab">굵기</span>
+      <button data-w="500">가늘게</button>
+      <button data-w="700" aria-pressed="true">보통</button>
+      <button data-w="800">굵게</button>
+      <button id="outline" aria-pressed="false">속 빈 글씨</button>
+      <button id="pano" aria-pressed="false">파노라마</button>
+    </div>
+
+    <div class="row" role="group" aria-label="모양 고르기">
+      <span class="lab">모양</span>
+      <button data-shape="star">별</button>
+      <button data-shape="heart">하트</button>
+      <button data-shape="ring">동그라미</button>
+      <button data-shape="spiral">나선</button>
+      <button data-shape="flower">꽃</button>
+      <button data-shape="plane">비행기</button>
+      <button data-shape="robot">로봇</button>
+      <button data-shape="face">얼굴</button>
+      <button data-shape="person">사람</button>
+      <span class="filebtn"><button type="button">사진을 불빛으로
+        <input type="file" id="pic" accept="image/*" aria-label="불빛으로 바꿀 사진"></button></span>
+      <span class="filebtn"><button type="button">배경 사진
+        <input type="file" id="bgpic" accept="image/*" aria-label="배경에 깔 사진"></button></span>
+      <button id="bgoff" type="button" hidden>배경 지우기</button>
+    </div>
+
+    <div class="row" role="group" aria-label="빛 색깔">
+      <span class="lab">빛 색</span>
+      <button data-col="white" aria-pressed="true">흰빛</button>
+      <button data-col="gold">금빛</button>
+      <button data-col="rainbow">무지개</button>
+      <button data-col="duo">두 색 번갈아</button>
+    </div>
+
+    <div class="row">
+      <label class="lab" for="n">드론 대수</label>
+      <input type="range" id="n" min="300" max="2600" step="100" value="1400">
+      <span class="count" id="nv">1,400대</span>
+    </div>
+
+    <div class="row" role="group" aria-label="저장">
+      <span class="lab">저장</span>
+      <button id="savepng">그림으로 저장</button>
+      <button id="savemp4" hidden>영상으로 저장</button>
+      <span id="recmsg" class="note" hidden>찍는 중… 4초</span>
+    </div>
+
+    <p class="note" id="err" hidden style="color:#ffb4b4"></p>
+
+    <p class="note">사진은 이 기기 안에서만 처리됩니다. 밖으로 보내지 않습니다.<br>
+    글씨는 20자까지. 대수를 올리면 더 또렷해집니다.<br>
+    영상은 4초를 찍습니다. 저장할 때 확인 창이 한 번 뜹니다.</p>
+  </div>
+</div>
+
+<script>
+function showErr(m){
+  var e=document.getElementById('err');
+  if(e){ e.textContent='막힌 곳 : '+m; e.hidden=false; }
+}
+window.addEventListener('error',function(ev){ showErr((ev.message||'')+' @'+(ev.lineno||'?')); });
+(function(){
+ try{
+  var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  var off=document.createElement('canvas'), octx=off.getContext('2d',{willReadFrequently:true});
+  var W=0,H=0,DPR=1;
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var parts=[], mode='white', count=1400, hueShift=0, bg=null;
+  var duoTick=0;
+  var weight='700', outline=false, fam='Gothic A1', pano=false, camX=0, camDir=1, VW=0, duoFlip=0;
+
+  function resize(){
+    var r=cv.parentElement.getBoundingClientRect();
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=Math.max(1,Math.round(r.width)); H=Math.max(1,Math.round(r.height));
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+
+  /* ── 글씨를 점으로 — 가늘게, 촘촘히 ── */
+  function fromText(s,n){
+    if(!s) s=' ';
+    VW = pano ? Math.round(W*2.4) : W;
+    off.width=VW; off.height=H;
+    octx.clearRect(0,0,VW,H);
+    var size=Math.floor(Math.min(H*0.34, VW*0.26));
+    octx.textAlign='center'; octx.textBaseline='middle';
+    for(var i=0;i<60;i++){
+      octx.font=weight+' '+size+'px "'+fam+'","Gothic A1","Apple SD Gothic Neo",sans-serif';
+      if(octx.measureText(s).width<=VW*0.88 || size<=10) break;
+      size=Math.floor(size*0.94);
+    }
+    if(outline){
+      octx.lineWidth=Math.max(2,size*0.045); octx.strokeStyle='#fff';
+      octx.lineJoin='round'; octx.strokeText(s,VW/2,H/2);
+    }else{
+      octx.fillStyle='#fff'; octx.fillText(s,VW/2,H/2);
+    }
+    camX = pano ? 0 : 0; camDir=1;
+    return sample(n,2);
+  }
+
+  function fromImage(img,n){
+    pano=false; setPano(); VW=W; off.width=W; off.height=H;
+    octx.clearRect(0,0,W,H);
+    var sc=Math.min(W*0.8/img.width,H*0.8/img.height);
+    var w=img.width*sc,h=img.height*sc;
+    octx.drawImage(img,(W-w)/2,(H-h)/2,w,h);
+    var d=octx.getImageData(0,0,W,H), p=d.data, out=[];
+    for(var y=0;y<H;y+=2){ for(var x=0;x<W;x+=2){
+      var i=(y*W+x)*4;
+      if(p[i+3]<120) continue;
+      if((p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)>96) out.push([x,y]);
+    }}
+    octx.clearRect(0,0,W,H);
+    return pick(out,n);
+  }
+
+  function sample(n,step){
+    var w=off.width, d=octx.getImageData(0,0,w,H), p=d.data, out=[];
+    for(var y=0;y<H;y+=step){ for(var x=0;x<w;x+=step){
+      if(p[(y*w+x)*4+3]>128) out.push([x,y]);
+    }}
+    return pick(out,n);
+  }
+
+  function pick(a,n){
+    if(!a.length) return [[W/2,H/2]];
+    var out=[],i;
+    if(a.length>=n){                       /* 고르게 뽑는다 — 한 곳에 뭉치지 않게 */
+      var stepf=a.length/n;
+      for(i=0;i<n;i++) out.push(a[Math.floor(i*stepf)]);
+    }else{
+      for(i=0;i<n;i++) out.push(a[i%a.length]);
+    }
+    return out;
+  }
+
+  /* ── 그림 모양 — 선으로 그려서 점으로 뽑는다 (글꼴·이모지에 안 기댄다) ── */
+  function drawPath(kind){
+    pano=false; setPano(); VW=W; off.width=W; off.height=H;
+    octx.clearRect(0,0,W,H);
+    var R=Math.min(W,H)*0.34, cx=W/2, cy=H/2;
+    octx.strokeStyle='#fff'; octx.lineWidth=Math.max(2,R*0.05);
+    octx.lineJoin='round'; octx.lineCap='round';
+    var g=octx, i, a;
+
+    if(kind==='flower'){
+      for(i=0;i<6;i++){
+        a=i*Math.PI/3;
+        g.save(); g.translate(cx,cy); g.rotate(a);
+        g.beginPath(); g.ellipse(0,-R*0.55,R*0.26,R*0.45,0,0,6.283); g.stroke();
+        g.restore();
+      }
+      g.beginPath(); g.arc(cx,cy,R*0.20,0,6.283); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy+R*0.22); g.quadraticCurveTo(cx+R*0.12,cy+R*0.7,cx,cy+R*1.05); g.stroke();
+      g.beginPath(); g.ellipse(cx+R*0.26,cy+R*0.72,R*0.22,R*0.11,-0.5,0,6.283); g.stroke();
+    }
+    else if(kind==='plane'){
+      g.beginPath();
+      g.moveTo(cx-R*1.0,cy);  g.lineTo(cx+R*0.55,cy-R*0.16);
+      g.lineTo(cx+R*0.95,cy); g.lineTo(cx+R*0.55,cy+R*0.16);
+      g.closePath(); g.stroke();                              /* 동체 */
+      g.beginPath();
+      g.moveTo(cx-R*0.1,cy-R*0.08); g.lineTo(cx-R*0.45,cy-R*0.75);
+      g.lineTo(cx-R*0.02,cy-R*0.75); g.lineTo(cx+R*0.3,cy-R*0.1); g.stroke();
+      g.beginPath();
+      g.moveTo(cx-R*0.1,cy+R*0.08); g.lineTo(cx-R*0.45,cy+R*0.75);
+      g.lineTo(cx-R*0.02,cy+R*0.75); g.lineTo(cx+R*0.3,cy+R*0.1); g.stroke();
+      g.beginPath();
+      g.moveTo(cx-R*0.85,cy-R*0.05); g.lineTo(cx-R*1.0,cy-R*0.38);
+      g.lineTo(cx-R*0.72,cy-R*0.38); g.stroke();              /* 꼬리 */
+    }
+    else if(kind==='robot'){
+      var hw=R*0.42, hh=R*0.34;
+      g.beginPath(); g.rect(cx-hw,cy-R*0.95,hw*2,hh*2); g.stroke();        /* 머리 */
+      g.beginPath(); g.moveTo(cx,cy-R*0.95); g.lineTo(cx,cy-R*1.25); g.stroke();
+      g.beginPath(); g.arc(cx,cy-R*1.3,R*0.07,0,6.283); g.stroke();        /* 안테나 */
+      g.beginPath(); g.arc(cx-R*0.17,cy-R*0.64,R*0.07,0,6.283); g.stroke();
+      g.beginPath(); g.arc(cx+R*0.17,cy-R*0.64,R*0.07,0,6.283); g.stroke();
+      g.beginPath(); g.moveTo(cx-R*0.16,cy-R*0.40); g.lineTo(cx+R*0.16,cy-R*0.40); g.stroke();
+      g.beginPath(); g.rect(cx-R*0.5,cy-R*0.22,R*1.0,R*0.78); g.stroke();  /* 몸통 */
+      g.beginPath(); g.moveTo(cx-R*0.5,cy-R*0.05); g.lineTo(cx-R*0.85,cy+R*0.1);
+      g.lineTo(cx-R*0.85,cy+R*0.45); g.stroke();
+      g.beginPath(); g.moveTo(cx+R*0.5,cy-R*0.05); g.lineTo(cx+R*0.85,cy+R*0.1);
+      g.lineTo(cx+R*0.85,cy+R*0.45); g.stroke();
+      g.beginPath(); g.moveTo(cx-R*0.26,cy+R*0.56); g.lineTo(cx-R*0.26,cy+R*1.05); g.stroke();
+      g.beginPath(); g.moveTo(cx+R*0.26,cy+R*0.56); g.lineTo(cx+R*0.26,cy+R*1.05); g.stroke();
+    }
+    else if(kind==='face'){
+      g.beginPath(); g.arc(cx,cy,R*0.9,0,6.283); g.stroke();
+      g.beginPath(); g.arc(cx-R*0.33,cy-R*0.22,R*0.10,0,6.283); g.stroke();
+      g.beginPath(); g.arc(cx+R*0.33,cy-R*0.22,R*0.10,0,6.283); g.stroke();
+      g.beginPath(); g.moveTo(cx-R*0.45,cy-R*0.5); g.quadraticCurveTo(cx-R*0.33,cy-R*0.62,cx-R*0.2,cy-R*0.5); g.stroke();
+      g.beginPath(); g.moveTo(cx+R*0.2,cy-R*0.5); g.quadraticCurveTo(cx+R*0.33,cy-R*0.62,cx+R*0.45,cy-R*0.5); g.stroke();
+      g.beginPath(); g.arc(cx,cy+R*0.12,R*0.46,0.25*Math.PI,0.75*Math.PI); g.stroke();
+    }
+    else { /* person — 걷는 사람 */
+      g.beginPath(); g.arc(cx,cy-R*0.86,R*0.19,0,6.283); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy-R*0.67); g.lineTo(cx,cy+R*0.18); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy-R*0.5); g.lineTo(cx-R*0.42,cy-R*0.18); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy-R*0.5); g.lineTo(cx+R*0.44,cy-R*0.46); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy+R*0.18); g.lineTo(cx-R*0.32,cy+R*0.72);
+      g.lineTo(cx-R*0.30,cy+R*1.12); g.stroke();
+      g.beginPath(); g.moveTo(cx,cy+R*0.18); g.lineTo(cx+R*0.30,cy+R*0.70);
+      g.lineTo(cx+R*0.46,cy+R*1.08); g.stroke();
+    }
+    return sample(100000,2);
+  }
+
+  /* ── 도형 ── */
+  var DRAWN={flower:1,plane:1,robot:1,face:1,person:1};
+  function fromShape(kind,n){
+    pano=false; setPano(); VW=W;
+    if(DRAWN[kind]) return pick(drawPath(kind),n);
+    var out=[], R=Math.min(W,H)*0.34, cx=W/2, cy=H/2, i,t;
+    if(kind==='star'){
+      var pts=[],j;
+      for(j=0;j<5;j++){var A=-Math.PI/2+j*(Math.PI*4/5); pts.push([cx+Math.cos(A)*R, cy+Math.sin(A)*R]);}
+      var per=Math.max(1,Math.floor(n/5));
+      for(j=0;j<5;j++){
+        var a1=pts[j], a2=pts[(j+1)%5];
+        for(i=0;i<per;i++){ var f=i/per; out.push([a1[0]+(a2[0]-a1[0])*f, a1[1]+(a2[1]-a1[1])*f]); }
+      }
+      return out;
+    }
+    for(i=0;i<n;i++){
+      t=i/n*Math.PI*2;
+      if(kind==='ring'){
+        out.push([cx+Math.cos(t)*R, cy+Math.sin(t)*R]);
+      }else if(kind==='heart'){
+        var s=R/17;
+        out.push([cx+16*Math.pow(Math.sin(t),3)*s,
+                  cy-(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))*s]);
+      }else{
+        var u=i/n, ang=u*Math.PI*2*4.2;
+        out.push([cx+Math.cos(ang)*R*u, cy+Math.sin(ang)*R*u]);
+      }
+    }
+    return out;
+  }
+
+  /* ── 불빛 ── */
+  function setTargets(T){
+    var n=T.length, i;
+    if(parts.length>n) parts.length=n;
+    while(parts.length<n){
+      parts.push({x:Math.random()*W, y:H+Math.random()*60, vx:0, vy:0,
+                  h:Math.random()*360, r:0.55+Math.random()*0.5});
+    }
+    for(i=0;i<n;i++){ parts[i].tx=T[i][0]; parts[i].ty=T[i][1]; }
+    if(reduce) for(i=0;i<n;i++){ parts[i].x=parts[i].tx; parts[i].y=parts[i].ty; parts[i].vx=parts[i].vy=0; }
+  }
+
+  function color(p,i){
+    if(mode==='white') return 'rgba(234,243,255,';
+    if(mode==='gold')  return 'rgba(255,209,102,';
+    if(mode==='duo'){
+      return ((i+duoFlip)%2) ? 'rgba(255,209,102,' : 'rgba(109,190,255,';
+    }
+    return 'hsla('+(((p.h+hueShift)%360)|0)+',92%,70%,';
+  }
+
+  function frame(){
+    if(bg){
+      ctx.globalCompositeOperation='source-over';
+      ctx.fillStyle='#070b18'; ctx.fillRect(0,0,W,H);
+      ctx.globalAlpha=0.55; ctx.drawImage(bg.c,0,0,W,H); ctx.globalAlpha=1;
+    }else{
+      ctx.fillStyle='rgba(7,11,24,0.50)';   /* 잔상을 짧게 — 뭉개지지 않게 */
+      ctx.fillRect(0,0,W,H);
+    }
+    ctx.globalCompositeOperation='lighter';
+    hueShift=(hueShift+0.5)%360;
+    if(mode==='duo' && (++duoTick%48===0)) duoFlip^=1;
+    if(pano && VW>W){
+      camX += camDir*1.6;
+      if(camX>VW-W){camX=VW-W; camDir=-1;}
+      if(camX<0){camX=0; camDir=1;}
+    }else camX=0;
+    for(var i=0;i<parts.length;i++){
+      var p=parts[i];
+      if(!reduce){
+        p.vx+=(p.tx-p.x)*0.095; p.vy+=(p.ty-p.y)*0.095;   /* 순식간에 */
+        p.vx*=0.74; p.vy*=0.74;
+        p.x+=p.vx; p.y+=p.vy;
+      }
+      var dx=p.x-camX;
+      if(dx<-20||dx>W+20) continue;
+      var c=color(p,i);
+      ctx.beginPath(); ctx.arc(dx,p.y,p.r*1.7,0,6.283);
+      ctx.fillStyle=c+'0.07)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(dx,p.y,p.r,0,6.283);
+      ctx.fillStyle=c+'0.95)'; ctx.fill();
+    }
+    ctx.globalCompositeOperation='source-over';
+    requestAnimationFrame(frame);
+  }
+
+  /* ── 조작 ── */
+  var txt=document.getElementById('txt');
+  function runText(){ setTargets(fromText(txt.value.trim()||'60AI만들기',count)); }
+
+  document.getElementById('run').addEventListener('click',runText);
+  txt.addEventListener('keydown',function(e){ if(e.key==='Enter') runText(); });
+
+  document.querySelectorAll('[data-shape]').forEach(function(b){
+    b.addEventListener('click',function(){ setTargets(fromShape(b.dataset.shape,count)); });
+  });
+
+  document.querySelectorAll('[data-col]').forEach(function(b){
+    b.addEventListener('click',function(){
+      mode=b.dataset.col;
+      document.querySelectorAll('[data-col]').forEach(function(o){o.setAttribute('aria-pressed',String(o===b));});
+    });
+  });
+
+  document.querySelectorAll('[data-w]').forEach(function(b){
+    b.addEventListener('click',function(){
+      weight=b.dataset.w;
+      document.querySelectorAll('[data-w]').forEach(function(o){o.setAttribute('aria-pressed',String(o===b));});
+      runText();
+    });
+  });
+  var ob=document.getElementById('outline');
+  ob.addEventListener('click',function(){
+    outline=!outline; ob.setAttribute('aria-pressed',String(outline)); runText();
+  });
+
+  /* 글씨체 — 기기에 글꼴이 안 깔리면 그 단추를 숨긴다 */
+  function famReady(name){
+    /* 글꼴이 안 깔렸으면 뒤받침 글꼴로 그려져 폭이 똑같다 — 그걸로 가린다 */
+    try{
+      var c=document.createElement('canvas').getContext('2d'), t='가나다라ABCabc123';
+      c.font='700 48px monospace'; var a=c.measureText(t).width;
+      c.font='700 48px "'+name+'", monospace'; var b=c.measureText(t).width;
+      if(Math.abs(a-b)>0.5) return true;
+      c.font='700 48px serif'; var d=c.measureText(t).width;
+      c.font='700 48px "'+name+'", serif'; var e2=c.measureText(t).width;
+      return Math.abs(d-e2)>0.5;
+    }catch(e){ return false; }
+  }
+  function checkFams(){
+    document.querySelectorAll('[data-chk]').forEach(function(b){
+      b.hidden = !famReady(b.dataset.f);
+    });
+  }
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(checkFams); else checkFams();
+  setTimeout(checkFams,1500);
+
+  document.querySelectorAll('[data-f]').forEach(function(b){
+    b.addEventListener('click',function(){
+      fam=b.dataset.f;
+      document.querySelectorAll('[data-f]').forEach(function(o){o.setAttribute('aria-pressed',String(o===b));});
+      runText();
+    });
+  });
+
+  var pb=document.getElementById('pano');
+  function setPano(){ pb.setAttribute('aria-pressed',String(pano)); }
+  pb.addEventListener('click',function(){ pano=!pano; setPano(); runText(); });
+
+  /* 저장 — 아티팩트 안에서는 claude 저장, 깃허브에서는 보통 내려받기 */
+  var DL=null;
+  if(window.claude && window.claude.use){
+    try{ window.claude.use('downloads').then(function(d){ DL=d; }, function(){}); }catch(e){}
+  }
+  function saveFile(name,blob){
+    if(DL){
+      DL.save({filename:name,data:blob}).then(function(){},function(err){
+        if(err && (err.code==='declined'||err.code==='rate_limited')) return;
+        fallbackSave(name,blob);
+      });
+      return;
+    }
+    fallbackSave(name,blob);
+  }
+  function fallbackSave(name,blob){
+    var u=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=u; a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ a.remove(); URL.revokeObjectURL(u); },1500);
+  }
+
+  document.getElementById('savepng').addEventListener('click',function(){
+    cv.toBlob(function(bl){ if(bl) saveFile('드론쇼.png',bl); },'image/png');
+  });
+
+  var mp4btn=document.getElementById('savemp4'), recmsg=document.getElementById('recmsg');
+  var recType=null;
+  (function(){
+    if(typeof MediaRecorder==='undefined' || !cv.captureStream) return;
+    var cand=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9',
+              'video/webm;codecs=vp8','video/webm','video/x-matroska;codecs=avc1'];
+    for(var i=0;i<cand.length;i++){
+      try{ if(MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(cand[i])){ recType=cand[i]; break; } }catch(e){}
+    }
+    if(!recType) recType='';          /* 꼴을 못 고르면 브라우저가 고르게 둔다 */
+    mp4btn.hidden=false;
+  })();
+
+  mp4btn.addEventListener('click',function(){
+    mp4btn.disabled=true; recmsg.hidden=false;
+    var chunks=[], st=cv.captureStream(30), mr;
+    try{
+      mr = recType ? new MediaRecorder(st,{mimeType:recType,videoBitsPerSecond:6000000})
+                   : new MediaRecorder(st);
+    }catch(e){
+      showErr('영상 녹화를 이 기기가 못 합니다 — '+((e&&e.message)||e));
+      mp4btn.disabled=false; recmsg.hidden=true; return;
+    }
+    if(!recType) recType = mr.mimeType || 'video/webm';
+    mr.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data); };
+    mr.onstop=function(){
+      var ext = recType.indexOf('mp4')>=0 ? 'mp4' : 'webm';
+      saveFile('드론쇼.'+ext, new Blob(chunks,{type:recType}));
+      mp4btn.disabled=false; recmsg.hidden=true;
+    };
+    /* 처음부터 모이는 장면이 찍히도록 다시 띄운다 */
+    var T=parts.map(function(p){return [p.tx,p.ty];});
+    parts=[]; setTargets(T);
+    for(var i=0;i<parts.length;i++){
+      parts[i].x=Math.random()*(VW||W); parts[i].y=H+Math.random()*80;
+    }
+    mr.start();
+    setTimeout(function(){ try{mr.stop();}catch(e){} },4000);
+  });
+
+  var nr=document.getElementById('n'), nv=document.getElementById('nv');
+  nr.addEventListener('input',function(){
+    count=+nr.value; nv.textContent=count.toLocaleString('ko-KR')+'대';
+    var T=parts.length?parts.map(function(p){return [p.tx,p.ty];}):[];
+    if(T.length) setTargets(pick(T,count)); else runText();
+  });
+
+  function readImage(input,cb){
+    var f=input.files&&input.files[0]; if(!f) return;
+    var url=URL.createObjectURL(f), im=new Image();
+    im.onload=function(){ cb(im); URL.revokeObjectURL(url); };
+    im.onerror=function(){ URL.revokeObjectURL(url); };
+    im.src=url;
+  }
+
+  document.getElementById('pic').addEventListener('change',function(e){
+    readImage(e.target,function(im){ setTargets(fromImage(im,count)); });
+  });
+
+  var bgoff=document.getElementById('bgoff');
+  document.getElementById('bgpic').addEventListener('change',function(e){
+    readImage(e.target,function(im){
+      var c=document.createElement('canvas'), g=c.getContext('2d');
+      c.width=W; c.height=H;
+      var sc=Math.max(W/im.width,H/im.height), w=im.width*sc, h=im.height*sc;
+      g.drawImage(im,(W-w)/2,(H-h)/2,w,h);
+      bg={c:c}; bgoff.hidden=false;
+    });
+  });
+  bgoff.addEventListener('click',function(){ bg=null; bgoff.hidden=true; });
+
+  window.addEventListener('resize',function(){
+    lastW=0; lastH=0; setTimeout(function(){ remeasure(); },50);
+  });
+
+  /* 하늘 칸 크기가 뒤늦게 잡히는 기기가 있다 — 바뀔 때마다 다시 잰다 */
+  var lastW=0,lastH=0;
+  function remeasure(){
+    var r=cv.parentElement.getBoundingClientRect();
+    var w=Math.round(r.width), h=Math.round(r.height);
+    if(w<40||h<40) return;
+    if(w===lastW && h===lastH) return;
+    lastW=w; lastH=h; resize(); bg=null; bgoff.hidden=true; runText();
+  }
+  if(window.ResizeObserver){
+    try{ new ResizeObserver(remeasure).observe(cv.parentElement); }catch(e){}
+  }
+  [60,200,600,1500,3000].forEach(function(t){ setTimeout(remeasure,t); });
+
+  resize();
+  runText();
+  for(var i=0;i<parts.length;i++){
+    parts[i].x=parts[i].tx+(Math.random()-0.5)*40;
+    parts[i].y=parts[i].ty+(Math.random()-0.5)*40;
+  }
+  requestAnimationFrame(frame);
+ }catch(e){ showErr((e&&e.message)||String(e)); }
+})();
+</script>
+
+</body>
+</html>
